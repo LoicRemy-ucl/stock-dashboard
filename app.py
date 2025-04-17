@@ -53,7 +53,7 @@ tab1, tab2, tab3, tab4 = st.tabs(["Overview", "Price Evolution", "Portfolio Opti
 
 # === TAB 1: OVERVIEW ===
 with tab1:
-    st.title("Stock Dashboard - Dow Jones 30")
+    st.title("Stock Dashboard")
     if selected_tickers:
         df = dashboard.get_current_overview(selected_tickers)
         ticker_strip = ""
