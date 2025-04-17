@@ -20,18 +20,27 @@ class StockDashboard:
 
     def run_optimizer(self, tickers, start_date, end_date, target_type, investment_amount, target_return=None):
         prices = self.fetcher.download_price_data(tickers, start_date, end_date)
-        returns = prices.pct_change().dropna()
+
+        # Drop columns with all NaNs (invalid tickers)
+        valid_prices = prices.dropna(axis=1, how='all')
+        valid_tickers = valid_prices.columns.tolist()
+        ignored_tickers = list(set(tickers) - set(valid_tickers))
+
+        if len(valid_tickers) < 2:
+            raise ValueError("Need at least 2 valid tickers with historical data for optimization.")
+
+        returns = valid_prices.pct_change().dropna()
         mean_returns = returns.mean() * 252
         cov_matrix = returns.cov() * 252
 
         optimizer = PortfolioOptimizer(returns, mean_returns, cov_matrix, target_type, target_return)
         weights = optimizer.optimize()
 
-        weight_dict = dict(zip(tickers, weights))
+        weight_dict = dict(zip(valid_tickers, weights))
         filtered_weights = {k: v for k, v in weight_dict.items() if v > 0}
         allocations = {ticker: weight * investment_amount for ticker, weight in weight_dict.items() if weight > 0}
 
-        return returns, filtered_weights, allocations, mean_returns, cov_matrix, weights
+        return returns, filtered_weights, allocations, mean_returns, cov_matrix, weights, ignored_tickers
 
     def compute_cumulative_returns(self, returns, weights, investment_amount):
         portfolio_returns = (returns @ weights).dropna()
