@@ -16,18 +16,14 @@ st.set_page_config(page_title="Stock Dashboard", layout="wide")
 st.sidebar.image("Logo.png", width=150)
 
 # --- SETTINGS ---
-ticker_names = {
-    "AAPL": "Apple Inc.", "AMGN": "Amgen Inc.", "AXP": "American Express", "BA": "Boeing Co.",
-    "CAT": "Caterpillar Inc.", "CSCO": "Cisco Systems", "CVX": "Chevron Corp.", "DIS": "Walt Disney Co.",
-    "DOW": "Dow Inc.", "GS": "Goldman Sachs", "HD": "Home Depot", "HON": "Honeywell",
-    "IBM": "IBM Corp.", "INTC": "Intel Corp.", "JNJ": "Johnson & Johnson", "JPM": "JPMorgan Chase",
-    "KO": "Coca-Cola Co.", "MCD": "McDonald's", "MMM": "3M Company", "MRK": "Merck & Co.",
-    "MSFT": "Microsoft Corp.", "NKE": "Nike Inc.", "PG": "Procter & Gamble", "TRV": "Travelers Companies",
-    "UNH": "UnitedHealth Group", "V": "Visa Inc.", "VZ": "Verizon Communications",
-    "WBA": "Walgreens Boots Alliance", "WMT": "Walmart Inc.", "RTX": "RTX Corp."
-}
-display_names = [f"{name} ({ticker})" for ticker, name in ticker_names.items()]
-ticker_lookup = {f"{name} ({ticker})": ticker for ticker, name in ticker_names.items()}
+st.sidebar.subheader("Enter Stock or ETF Tickers")
+user_input = st.sidebar.text_input("Comma-separated tickers (e.g., AAPL,MSFT,TSLA,VOO)", value="AAPL,MSFT,TSLA")
+
+selected_tickers = [ticker.strip().upper() for ticker in user_input.split(",") if ticker.strip()]
+
+if not selected_tickers:
+    st.sidebar.warning("Please enter at least one valid ticker symbol.")
+
 
 # --- SIDEBAR ---
 st.sidebar.subheader("Date Range")
@@ -38,9 +34,6 @@ end_date = st.sidebar.date_input("End date", default_end)
 
 if start_date >= end_date:
     st.sidebar.error("Start date must be before end date.")
-
-selected_display_names = st.sidebar.multiselect("Select Stocks", display_names, default=display_names[:5])
-selected_tickers = [ticker_lookup[name] for name in selected_display_names]
 
 st.sidebar.subheader("Investment Amount")
 investment_amount = st.sidebar.number_input("Total investment (€)", min_value=1000, max_value=1_000_000, value=10000)
@@ -117,14 +110,21 @@ with tab3:
     st.subheader("Portfolio Optimization")
     if len(selected_tickers) >= 2 and st.button("Run Optimization"):
         try:
-            returns, filtered_weights, allocations, mean_returns, cov_matrix, weights = dashboard.run_optimizer(
-                selected_tickers, start_date, end_date, target_type, investment_amount, target_return)
-
+            returns, filtered_weights, allocations, mean_returns, cov_matrix, weights, ignored_tickers = dashboard.run_optimizer(
+                selected_tickers, start_date, end_date, target_type, investment_amount, target_return
+            )
+            if ignored_tickers:
+                st.warning(f"The following tickers were ignored due to missing data: {', '.join(ignored_tickers)}")
             # Display weights and allocations
-            weights_df = pd.DataFrame.from_dict(filtered_weights, orient='index', columns=['Weight'])
+            # Show all tickers, even those with 0% weight
+            weight_dict = dict(zip(selected_tickers, weights))  # Use this to ensure all are included
+            weights_df = pd.DataFrame.from_dict(weight_dict, orient='index', columns=['Weight'])
             weights_df['Weight'] = weights_df['Weight'].apply(lambda x: f"{x:.2%}")
-            alloc_df = pd.DataFrame.from_dict(allocations, orient='index', columns=['Allocated (€)'])
+
+            alloc_dict = {ticker: weight * investment_amount for ticker, weight in weight_dict.items()}
+            alloc_df = pd.DataFrame.from_dict(alloc_dict, orient='index', columns=['Allocated (€)'])
             alloc_df['Allocated (€)'] = alloc_df['Allocated (€)'].apply(lambda x: f"{x:,.2f} €")
+
             combined_df = weights_df.join(alloc_df)
             st.table(combined_df)
 
